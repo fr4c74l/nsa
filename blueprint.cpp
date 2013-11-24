@@ -2,6 +2,9 @@
 #include <vector>
 #include <iostream>
 #include <cstdlib>
+#include <fstream>
+
+#define DEBUG 1
 
 std::mt19937 rand_gen((std::random_device())());
 
@@ -23,7 +26,7 @@ struct Dimension {
 class Blueprint {
 public:
     Blueprint(size_t cols, size_t rows);
-    void show();
+    void dump(const char *filename);
 
 private:
     enum Tiles { 
@@ -78,6 +81,14 @@ Blueprint::Blueprint(size_t cols, size_t rows):
     size.cols = dim.cols * WSQUARE_WIDTH;
     size.rows = dim.rows * WSQUARE_HEIGHT;
 
+    if(DEBUG) {
+        std::cout << "Size..."
+            << "\n  ...in rooms: " << rooms.cols << 'x' << rooms.rows
+            << "\n  ...in blocks: " << cols << 'x' << rows
+            << "\n  ...in pixels(?): " << size.cols << 'x' << size.rows
+            << std::endl;
+    }
+
     horiz.resize(rooms.rows+1, std::vector<bool>(rooms.cols));
     vert.resize(rooms.rows, std::vector<bool>(rooms.cols+1));
 
@@ -108,13 +119,17 @@ Blueprint::Blueprint(size_t cols, size_t rows):
     implement_rooms();
 }
 
-void Blueprint::show()
+void Blueprint::dump(const char* filename)
 {
+    std::ofstream out(filename);
+    out << "P2\n"
+        << map[0].size() << ' ' << map.size() << '\n'
+        << "20\n";
     for(const auto& row: this->map) {
         for(const auto& col: row) {
-            std::cout << (int)col << ' ';
+            out << (10 * (int)col) << ' ';
         }
-        std::cout << '\n';
+        out << '\n';
     }
 }
 
@@ -292,11 +307,18 @@ void Blueprint::implement_rooms()
 }
 
 int main(int argc, char **argv) {
-    if(argc != 3) {
-        std::cout << "Missing parameters!\n";
-        return 0;
-    }
+    uint16_t cols = 130, rows = 32;
+    const char* filename = "map.pnm";
 
-    auto b = Blueprint(atoi(argv[1]), atoi(argv[2]));
-    b.show();
+    if(argc > 1)
+        filename = argv[1];
+
+    if(argc > 2)
+        cols = atoi(argv[2]);
+
+    if(argc > 3)
+        rows = atoi(argv[3]);
+
+    auto b = Blueprint(cols, rows);
+    b.dump(filename);
 }
