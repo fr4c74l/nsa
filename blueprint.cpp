@@ -56,6 +56,7 @@ private:
 	void missing_left(const RoomIndex & ri, const Dimension & rl);
 
 	bool inside(const Dimension &l);
+	bool inside(int r, int c);
 	bool is_tile_open(const Dimension &loc, bool laddersClosed=false,
 			bool postersClosed=false, bool doorsClosed=false, bool outsideClosed=true);
 	void add_movers();
@@ -85,6 +86,7 @@ const float Blueprint::COLS_PER_ROOM = 26;
 
 Blueprint::Blueprint(size_t cols, size_t rows):
 	dim(cols, rows),
+	max_obj(2, 2),
 	moversNum(0),
 	map(rows + ROWS_PER_ROOM, std::vector < uint8_t > (cols + COLS_PER_ROOM)),
 	coin(0, 1)
@@ -109,9 +111,6 @@ Blueprint::Blueprint(size_t cols, size_t rows):
 	horiz.resize(rooms.rows + 1, std::vector < bool > (rooms.cols));
 	vert.resize(rooms.rows, std::vector < bool > (rooms.cols + 1));
 
-	middleCols.resize(rooms.cols + 1);
-	middleRows.resize(rooms.rows + 1);
-
 	// Boundaries only at the edges of the world.
 	RoomIndex ri;
 	for (ri.across = 0; ri.across < rooms.cols + 1; ri.across++) {
@@ -131,6 +130,19 @@ Blueprint::Blueprint(size_t cols, size_t rows):
 
 	fill_random();
 
+	// Compute middles
+	middleRows.reserve(rooms.rows + 1);
+	for (int riR = 0; riR < rooms.rows; riR++) {
+		std::uniform_int_distribution<> choice(1, ROWS_PER_ROOM - 2 * (max_obj.rows + 1));
+		middleRows.push_back(max_obj.rows + choice(rand_gen));
+	}
+
+	middleCols.reserve(rooms.cols + 1);
+	for (int riC = 0; riC < rooms.cols; riC++) {
+		std::uniform_int_distribution<> choice(1, COLS_PER_ROOM - 2 * (max_obj.cols + 1));
+		middleCols.push_back(max_obj.cols + choice(rand_gen));
+	}
+
 	// Fill in walls between rooms and ladders,
 	// connecting adjacent rooms.
 	implement_rooms();
@@ -139,7 +151,7 @@ Blueprint::Blueprint(size_t cols, size_t rows):
 void Blueprint::dump(const char *filename)
 {
 	std::ofstream out(filename);
-	out << "P2\n" << map[0].size() << ' ' << map.size() << '\n' << "20\n";
+	out << "P2\n" << map[0].size() << ' ' << map.size() << '\n' << "60\n";
 
 	for (const auto & row:this->map) {
 		for (const auto & col:row) {
@@ -247,8 +259,8 @@ void Blueprint::missing_bottom(const RoomIndex & roomIndex,
 	     c < roomLoc.cols + middleCols[roomIndex.across] + max_obj.cols;
 	     c++) {
 		for (int r =
-		     roomLoc.rows + middleRows[roomIndex.down] - max_obj.rows;
-		     r < roomLoc.rows + ROWS_PER_ROOM; r++) {
+				roomLoc.rows + middleRows[roomIndex.down] - max_obj.rows;
+				r < roomLoc.rows + ROWS_PER_ROOM; r++) {
 			map[r][c] = Wladder;
 		}
 	}
@@ -265,7 +277,7 @@ void Blueprint::missing_left(const RoomIndex & roomIndex,
 			     const Dimension & roomLoc)
 {
 	for (int c = roomLoc.cols;
-	     c < roomLoc.cols + middleCols[roomIndex.across]; c++) {
+			c < roomLoc.cols + middleCols[roomIndex.across]; c++) {
 		map[roomLoc.rows + middleRows[roomIndex.down]][c] = Wwall;
 	}
 }
@@ -281,7 +293,7 @@ void Blueprint::missing_right(const RoomIndex & roomIndex,
 			      const Dimension & roomLoc)
 {
 	for (int c = roomLoc.cols + middleCols[roomIndex.across] + max_obj.cols;
-	     c < roomLoc.cols + COLS_PER_ROOM; c++) {
+			c < roomLoc.cols + COLS_PER_ROOM; c++) {
 		map[roomLoc.rows + middleRows[roomIndex.down]][c] = Wwall;
 	}
 }
@@ -293,10 +305,11 @@ void Blueprint::implement_rooms()
 
 	// Walls between rooms.
 	for (ri.across = 0, rl.cols = 0;
-	     ri.across < rooms.cols; ri.across++, rl.cols += COLS_PER_ROOM) {
+			ri.across < rooms.cols;
+			ri.across++, rl.cols += COLS_PER_ROOM) {
 		for (ri.down = 0, rl.rows = 0;
-		     ri.down < rooms.rows;
-		     ri.down++, rl.rows += ROWS_PER_ROOM) {
+				ri.down < rooms.rows;
+				ri.down++, rl.rows += ROWS_PER_ROOM) {
 			if (!horiz[ri.down][ri.across]) {
 				missing_top(ri, rl);
 			} else {
@@ -324,7 +337,12 @@ void Blueprint::implement_rooms()
 bool Blueprint::inside(const Dimension &l)
 {
 	return l.rows >= 0 && l.cols >= 0
-		&& l.rows < dim.rows && l.cols < dim.cols;
+			&& l.rows < dim.rows && l.cols < dim.cols;
+}
+
+bool Blueprint::inside(int r, int c)
+{
+	return inside(Dimension(c, r));
 }
 
 bool Blueprint::is_tile_open(const Dimension &loc, bool laddersClosed,
@@ -471,8 +489,8 @@ bool Blueprint::add_horiz_mover()
 			// Add a mover square.
 			map[loc.rows][loc.cols] = WmoverTrack;
 
-			left = std::min(left, loc.cols);
-			right = std::max(right, loc.cols);
+			left = std::min<int>(left, loc.cols);
+			right = std::max<int>(right, loc.cols);
 			n++;
 
 			loc.cols += delta;
@@ -485,164 +503,112 @@ bool Blueprint::add_horiz_mover()
 	return true;
 }
 
-
-// TODO: to be contined...
 // What an ugly function.  I should redo this.
-Boolean World::add_vert_mover() {
-  assert(moversNum <= MOVERS_MAX && blueprints);
-  // Movers shouldn't be too big.
-  assert(objectDimMax.colMax * WSQUARE_WIDTH >= moverSize.width);
+bool Blueprint::add_vert_mover()
+{
+	// Choose a random room, check if its middle is a ladder, if so, change
+	// the ladder to a bunch of mover squares and create a new mover.
+	// Else continue.
+	Dimension init;
+	int m; // holder for the down/across value of the room chosen.
+	m = std::uniform_int_distribution<>(0, rooms.cols - 1)(rand_gen);
+	init.cols =  m * COLS_PER_ROOM + middleCols[m];
+	m = std::uniform_int_distribution<>(0, rooms.rows - 1)(rand_gen);
+	init.rows =  m * ROWS_PER_ROOM + middleRows[m];
 
+	// Found a ladder, create a new mover and set all the ladder wsquares to be
+	// MoverSquares pointing to the new mover.
+	if (!(map[init.rows][init.cols] == Wladder && 
+			map[init.rows][init.cols+1] == Wladder)) {
+		return false;
+	} 
 
-  // Choose a random room, check if its middle is a ladder, if so, change
-  // the ladder to a bunch of mover squares and create a new mover.
-  // Else continue.
-  Loc init;
-  int m; // holder for the down/across value of the room chosen.
-  m = Utils::choose(rooms.acrossMax);
-  init.c =  m * W_ROOM_COL_MAX + blueprints->get_middle_col(m);
-  m = Utils::choose(rooms.downMax);
-  init.r =  m * W_ROOM_ROW_MAX + blueprints->get_middle_row(m);
+	// All wsquares between top and bottom, exclusive, are part of the
+	// mover.
+	int top = init.rows;
+	int bottom = init.rows;
 
+	// delta is -1, then 1.  Go up, then down..
+	for (int delta = -1; delta <= 1; delta += 2) {
+		Dimension loc = init;
 
-  // Found a ladder, create a new mover and set all the ladder wsquares to be
-  // MoverSquares pointing to the new mover.
-  if (!(map[init.r][init.c] == Wladder && 
-        map[init.r][init.c+1] == Wladder)) {
-    return False;
-  } 
+		// To avoid hitting init twice, skip it when going down.
+		if (delta == 1) {
+			loc.rows++;
+		}
 
-  assert(!unionSquares[init.r][init.c]);
+		// Scan up/down depending on value of delta.
+		bool bothInside = inside(loc) && inside(loc.rows, loc.cols + 1);
+		bool bothLadders = bothInside &&
+				(map[loc.rows][loc.cols] == Wladder && map[loc.rows][loc.cols+1] == Wladder);
+		bool aboveInside = inside(loc.rows - 1, loc.cols) && inside(loc.rows - 1, loc.cols + 1);
+		bool aboveMoverSq = aboveInside
+				&& ((map[loc.rows-1][loc.cols] == WmoverTrack
+					&& map[loc.rows-1][loc.cols+1] == WmoverTrack)
+				|| (map[loc.rows-1][loc.cols] == WliftTrack
+					&& map[loc.rows-1][loc.cols+1] == WliftTrack));
+		bool bothWalls = bothInside && 
+			(map[loc.rows][loc.cols] == Wwall && map[loc.rows][loc.cols + 1] == Wwall);
 
-  // All wsquares between mTop and mBottom, exclusive, are part of the
-  // mover.
-  int mTop = init.r;
-  int mBottom = init.r;
+		// This shit is all so that movers can stick down one square into floor.
+		// CAREFUL!! Crappy code duplicated below.
+		while (bothLadders ||  // normal case 
+				(delta == 1 && aboveMoverSq && bothWalls) ) { // sticking down one
+			// Scan to right.
+			for (; loc.cols < init.cols + max_obj.cols; loc.cols++) {
+				// Add a mover square.
+				assert(inside(loc) && 
+					(map[loc.rows][loc.cols] == Wladder || map[loc.rows][loc.cols] == Wwall));
+				map[loc.rows][loc.cols] = WliftTrack;
 
-  movers[moversNum] = new Mover;
-  assert(movers[moversNum]);
+				// Still leave overlap of wall and moversquare.
+				if (map[loc.rows][loc.cols] != Wwall) {
+					map[loc.rows][loc.cols] = Wempty;
+				}
 
-  // delta is -1, then 1.  Go up, then down..
-  for (int delta = -1; delta <= 1; delta += 2) {
-    Loc loc = init;
+				top = std::min<int>(top, loc.rows);
+				bottom = std::max<int>(bottom, loc.rows + 1);
+			}
+			loc.cols = init.cols;
 
-    // To avoid hitting init twice, skip it when going down.
-    if (delta == 1) {
-      loc.r++;
-    }
+			// When up at the top.
+			// Remove annoying ladder sticking up.
+			if (delta ==  -1 &&
+					map[loc.rows - max_obj.rows - 1][loc.cols] != Wladder) {
+				int locTop = loc.rows - max_obj.rows;
+				for (loc.rows--; loc.rows >= locTop; loc.rows--) {
+					for (loc.cols = init.cols; loc.cols < init.cols + max_obj.cols; loc.cols++) {
+						map[loc.rows][loc.cols] = Wempty;
+					}
+				}
 
-    // Scan up/down depending on value of delta.
-    Boolean bothInside = inside(loc) && inside(loc.r,loc.c+1);
-    Boolean bothLadders = bothInside && 
-      (map[loc.r][loc.c] == Wladder && map[loc.r][loc.c+1] == Wladder);
-    Boolean aboveInside = inside(loc.r-1,loc.c) && inside(loc.r-1,loc.c+1);
-    Boolean aboveMoverSq = aboveInside && 
-      map[loc.r-1][loc.c] == Wempty && 
-      map[loc.r-1][loc.c+1] == Wempty &&
-      unionSquares[loc.r-1][loc.c] && 
-      unionSquares[loc.r-1][loc.c+1] &&
-      unionSquares[loc.r-1][loc.c]->type == UN_MOVER && 
-      unionSquares[loc.r-1][loc.c+1]->type == UN_MOVER;
-    Boolean bothWalls = bothInside && 
-      (map[loc.r][loc.c] == Wwall && map[loc.r][loc.c+1] == Wwall);
-    // This shit is all so that movers can stick down one square into floor.
-    // CAREFUL!! Crappy code duplicated below.
+				break;
+			} // annoying ladder sticking up.
 
-    while (bothLadders ||  // normal case 
-           (delta == 1 && aboveMoverSq && bothWalls) ) { // sticking down one
-      
-      // Scan to right.
-      for (; loc.c < init.c + objectDimMax.colMax; loc.c++) {
-        // Add a mover square.
-        assert(inside(loc) && 
-               (map[loc.r][loc.c] == Wladder || map[loc.r][loc.c] == Wwall) &&
-               !unionSquares[loc.r][loc.c]);
-        unionSquares[loc.r][loc.c] = new UnionSquare;
-        assert(unionSquares[loc.r][loc.c]);
-        unionSquares[loc.r][loc.c]->type = UN_MOVER;
-        unionSquares[loc.r][loc.c]->mSquare.mover = movers[moversNum];
-        unionSquares[loc.r][loc.c]->mSquare.orientation = OR_VERT;
+			loc.cols = init.cols;
+			loc.rows += delta;
 
-        // Still leave overlap of wall and moversquare.
-        if (map[loc.r][loc.c] != Wwall) {
-          map[loc.r][loc.c] = Wempty;
-        }
+			bothInside = inside(loc) && inside(loc.rows, loc.cols+1);
+			bothLadders = bothInside && 
+					(map[loc.rows][loc.cols] == Wladder && map[loc.rows][loc.cols+1] == Wladder);
+			aboveInside = inside(loc.rows-1, loc.cols) && inside(loc.rows-1, loc.cols+1);
+			aboveMoverSq = aboveInside
+					&& ((map[loc.rows-1][loc.cols] == WmoverTrack
+						&& map[loc.rows-1][loc.cols+1] == WmoverTrack)
+					|| (map[loc.rows-1][loc.cols] == WliftTrack
+						&& map[loc.rows-1][loc.cols+1] == WliftTrack));
+			bothWalls = bothInside &&
+					(map[loc.rows][loc.cols] == Wwall && map[loc.rows][loc.cols+1] == Wwall);
+			// This shit is all so that movers can stick down one square into 
+			// the floor.
+		} // while
+	} // for delta
+	// Note: loc is now at the left side of the former ladder,
+	 // one square beneath it.
 
-        mTop = Utils::minimum(mTop,loc.r);
-        mBottom = Utils::maximum(mBottom,loc.r + 1);
-    	}
-	    loc.c = init.c;
+	assert(top < bottom);  // Or no squares were added.
 
-      // When up at the top.
-      // Remove annoying ladder sticking up.
-      if (delta ==  -1 &&
-          map[loc.r - objectDimMax.rowMax - 1][loc.c] != Wladder &&
-          // Just to be sure we don't kill of some unionSquares.
-          !unionSquares[loc.r - objectDimMax.rowMax - 1][loc.c]) {
-        int locTop = loc.r - objectDimMax.rowMax;
-        for (loc.r--; loc.r >= locTop; loc.r--) {
-          for (loc.c = init.c; loc.c < init.c + objectDimMax.colMax; 
-               loc.c++) {
-            map[loc.r][loc.c] = Wempty;
-          }
-        }
-        
-        break;
-      } // annoying ladder sticking up.
-      
-      loc.c = init.c;
-      loc.r += delta;
-
-      
-      bothInside = inside(loc) && inside(loc.r,loc.c+1);
-      bothLadders = bothInside && 
-        (map[loc.r][loc.c] == Wladder && map[loc.r][loc.c+1] == Wladder);
-      aboveInside = inside(loc.r-1,loc.c) && inside(loc.r-1,loc.c+1);
-      aboveMoverSq = aboveInside && 
-        map[loc.r-1][loc.c] == Wempty && 
-        map[loc.r-1][loc.c+1] == Wempty &&
-        unionSquares[loc.r-1][loc.c] && 
-        unionSquares[loc.r-1][loc.c+1] &&
-        unionSquares[loc.r-1][loc.c]->type == UN_MOVER && 
-        unionSquares[loc.r-1][loc.c+1]->type == UN_MOVER;
-      bothWalls = bothInside && 
-        (map[loc.r][loc.c] == Wwall && map[loc.r][loc.c+1] == Wwall);
-      // This shit is all so that movers can stick down one square into 
-      // the floor.
-
-    } // while
-  } // for delta
-  // Note: loc is now at the left side of the former ladder,
-  // one square beneath it.
-
-  assert(mTop < mBottom);  // Or no squares were added.
-
-  // Choose Y position somewhere in range of mover squares.
-  int rangeY = (mBottom - mTop) * WSQUARE_HEIGHT - moverSize.height + 1;
-  assert(rangeY > 0); // or movers are more than one square high.
-  int startY = Utils::choose(rangeY) + mTop * WSQUARE_HEIGHT;
-
-  Pos pos(init.c * WSQUARE_WIDTH,startY);
-  Area area(AR_RECT,pos,moverSize);
-
-  Size vel;
-  vel.set(0,Utils::coin_flip() ? W_MOVER_SPEED : -W_MOVER_SPEED);
-  // initialize the mover.
-  MoverId moverId;
-  moverId.index = moversNum;
-  moverId.unique = uniqueGen++;
-
-  movers[moversNum]->init(this,locator,area,vel,moverId);
-
-  // Dummy mover object, so mover gets redrawn.
-  PhysMoverP p = new PhysMover(this,locator,movers[moversNum]);
-  assert(p);
-  locator->add(p);
-
-  movers[moversNum]->set_phys_mover_id(p->get_id());
-
-  moversNum++;
-  return True;
+	return true;
 }
 
 
