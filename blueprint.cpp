@@ -21,7 +21,7 @@ struct Dimension {
 	
 	Dimension(uint16_t c, uint16_t r):cols(c), rows(r)
 	{}
-	uint16_t cols, rows;
+	int16_t cols, rows;
 };
 
 class Blueprint {
@@ -62,6 +62,9 @@ private:
 	void add_movers();
 	bool add_vert_mover();
 	bool add_horiz_mover();
+
+	void ladder(const Dimension& init);
+	void extra_walls();
 
 	static const float ROWS_PER_ROOM;
 	static const float COLS_PER_ROOM;
@@ -146,6 +149,8 @@ Blueprint::Blueprint(size_t cols, size_t rows):
 	// Fill in walls between rooms and ladders,
 	// connecting adjacent rooms.
 	implement_rooms();
+
+	extra_walls();
 }
 
 void Blueprint::dump(const char *filename)
@@ -611,6 +616,138 @@ bool Blueprint::add_vert_mover()
 	return true;
 }
 
+void Blueprint::ladder(const Dimension &init) {
+	// delta is only -1 and 1.
+	for (int delta = -1; delta <= 1; delta += 2) {
+		Dimension loc = init;
+
+		// To avoid hitting init twice.
+		if (delta == 1) {
+			loc.rows++;
+		}
+
+		// Running directly into wall or ladder.
+		while (is_tile_open(loc, true)) {
+			map[loc.rows][loc.cols] = Wladder;
+
+			// Stop when there is a wall to the left or right.
+			Dimension left, right;
+			right.rows = left.rows = loc.rows;
+			left.cols = loc.cols - 1;
+			right.cols = loc.cols + 1;
+			if ((!is_tile_open(left) || !is_tile_open(right))) {
+				// Extra extension at top.
+				if (delta == -1) {
+					for (int extra = 1; extra <= max_obj.rows; extra++) {
+						Dimension extraLoc;
+						extraLoc.cols = loc.cols;
+						extraLoc.rows = loc.rows - extra;
+						if (is_tile_open(extraLoc, true)) {
+							map[extraLoc.rows][extraLoc.cols] = Wladder;
+						}
+						else {
+							break;
+						}
+					}
+				}
+				break;
+			}
+
+			loc.rows += delta;
+		} // while
+	} // for delta
+}
+
+void Blueprint::extra_walls()
+{
+	const float WALLS_PERCENT = 0.01;
+	const int MEAN_WALL_LENGTH = 30;
+
+	const int WALLS_HORIZ_CHANCE = 4; // 2 gives equal chance
+	const int LADDER_CHANCE = 10;
+	const int UP_DOWN_CHANCE = 4;
+
+	for(int walls = 0; walls < dim.rows * dim.cols * WALLS_PERCENT; ++walls) {
+		bool ok = true;
+		Dimension loc;
+		loc.rows = std::uniform_int_distribution<>(0, dim.rows - 1)(rand_gen);
+		loc.cols = std::uniform_int_distribution<>(0, dim.cols - 1)(rand_gen);
+		int delta = coin(rand_gen) ? 1 : -1;
+		int horiz = std::uniform_int_distribution<>(0, WALLS_HORIZ_CHANCE - 1)(rand_gen);
+
+		Dimension check;
+		for (check.cols = loc.cols - max_obj.cols;
+				check.cols <= loc.cols + max_obj.cols;
+				check.cols++)
+		{
+			for (check.rows = loc.rows - max_obj.rows;
+					check.rows <= loc.rows + max_obj.rows;
+					check.rows++)
+			{
+				if (!is_tile_open(check, true)) {
+					ok = false;
+				}
+			}
+		}
+
+		// Horizontal extra wall.
+		if (horiz) {
+			while (ok && std::uniform_int_distribution<>(0, MEAN_WALL_LENGTH - 1)(rand_gen)) {
+				for (check.cols = loc.cols;
+						check.cols != loc.cols + delta * (max_obj.cols + 1);
+						check.cols += delta)
+				{
+					for (check.rows = loc.rows - max_obj.rows;
+							check.rows <= loc.rows + max_obj.rows;
+							check.rows++)
+					{
+						if (!is_tile_open(check, true)) {
+							ok = false;
+						}
+					}
+				}
+
+				if (ok) {
+					if (!std::uniform_int_distribution<>(0, LADDER_CHANCE-1)(rand_gen)) {
+						ladder(loc);
+					}
+					else {
+						map[loc.rows][loc.cols] = Wwall;
+					}
+
+					loc.cols += delta;
+
+					if (std::uniform_int_distribution<>(0, UP_DOWN_CHANCE-1)(rand_gen) == 0) {
+						loc.rows += (coin(rand_gen) ? 1 : -1);
+					}
+				}
+			}
+		}
+
+		// Vertical wall, horiz == 0
+		else {
+			while (ok && std::uniform_int_distribution<>(0, MEAN_WALL_LENGTH - 1)(rand_gen)) {
+				for (check.rows = loc.rows;
+						check.rows != loc.rows + delta * (max_obj.rows + 1);
+						check.rows += delta)
+				{
+					for (check.cols = loc.cols - max_obj.cols;
+							check.cols <= loc.cols + max_obj.cols;
+							check.cols++)
+					{
+						if (!is_tile_open(check, true)) {
+							ok = false;
+						}
+					}
+				}
+				if (ok) {
+					map[loc.rows][loc.cols] = Wwall;
+					loc.rows += delta;
+				}
+			}
+		}
+	} // for walls.
+}
 
 int main(int argc, char **argv)
 {
