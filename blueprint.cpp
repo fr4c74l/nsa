@@ -36,10 +36,6 @@ private:
 		Wladder,
 		WliftTrack,
 		WmoverTrack,
-		// Just a visual block that tells if there is  a nearby ladder or lift,
-		// functions like a Wwall:
-		WupDown, 
-		Woutside,
 	};
 
 	bool is_room_open(const RoomIndex & ri) const;
@@ -69,9 +65,8 @@ private:
 	static const float ROWS_PER_ROOM;
 	static const float COLS_PER_ROOM;
 
-	Dimension rooms;	// in rooms...
-	Dimension dim;		// in tiles ???
-	Dimension size;		// in pixels ??
+	Dimension rooms;	// in rooms
+	Dimension dim;		// in tiles
 
 	Dimension max_obj;	// biggest object in scene
 
@@ -94,20 +89,13 @@ Blueprint::Blueprint(size_t cols, size_t rows):
 	map(rows + ROWS_PER_ROOM, std::vector < uint8_t > (cols + COLS_PER_ROOM)),
 	coin(0, 1)
 {
-	const uint16_t WSQUARE_WIDTH = 16;
-	const uint16_t WSQUARE_HEIGHT = 16;
-
 	rooms.cols = (uint16_t) ceilf(cols / COLS_PER_ROOM);
 	rooms.rows = (uint16_t) ceilf(rows / ROWS_PER_ROOM);
-
-	size.cols = dim.cols * WSQUARE_WIDTH;
-	size.rows = dim.rows * WSQUARE_HEIGHT;
 
 	if (DEBUG) {
 		std::cout << "Size..."
 			<< "\n  ...in rooms: " << rooms.cols << 'x' << rooms.rows
 			<< "\n  ...in blocks: " << cols << 'x' << rows
-			<< "\n  ...in pixels(?): " << size.cols << 'x' << size.rows
 			<< std::endl;
 	}
 
@@ -150,20 +138,32 @@ Blueprint::Blueprint(size_t cols, size_t rows):
 	// connecting adjacent rooms.
 	implement_rooms();
 
+	add_movers();
+
 	extra_walls();
 }
 
 void Blueprint::dump(const char *filename)
 {
+	const int SCALE = 16;
+	const char* const colormap[] = {
+		"255 255 255", // Wempty
+		"0 0 0", // Wwall
+		"0 0 255", // Wladder
+		"255 0 0", // WliftTrack
+		"255 255 0", // WmoverTrack
+	};
 	std::ofstream out(filename);
-	out << "P2\n" << map[0].size() << ' ' << map.size() << '\n' << "60\n";
+	out << "P3\n" << map[0].size()*SCALE << ' ' << map.size()*SCALE << '\n' << "255\n";
 
-	for (const auto & row:this->map) {
-		for (const auto & col:row) {
-			out << (10 * (int)col) << ' ';
+	for (const auto & row:this->map)
+		for(uint8_t i = 0; i < SCALE; ++i) {
+			for (const auto & col:row) {
+				for(uint8_t j = 0; j < SCALE; ++j)
+					out << colormap[col] << ' ';
+			}
+			out << '\n';
 		}
-		out << '\n';
-	}
 }
 
 bool Blueprint::is_room_open(const RoomIndex & ri) const
