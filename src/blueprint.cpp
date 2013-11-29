@@ -6,7 +6,7 @@
 #include <cassert>
 #include <cstdlib>
 
-#define DEBUG 1
+#include "heapmatrix.hpp"
 
 std::mt19937 rand_gen((std::random_device())());
 
@@ -72,8 +72,8 @@ private:
 
 	size_t moversNum;
 
-	std::vector < std::vector < bool >> horiz, vert;
-	std::vector < std::vector < uint8_t >> map;
+	HeapMatrix<bool> horiz, vert;
+	HeapMatrix<uint8_t> map;
 	std::vector < int >middleCols, middleRows;
 
 	std::uniform_int_distribution<> coin;
@@ -86,7 +86,7 @@ Blueprint::Blueprint(size_t cols, size_t rows):
 	dim(cols, rows),
 	max_obj(2, 2),
 	moversNum(0),
-	map(rows + ROWS_PER_ROOM, std::vector < uint8_t > (cols + COLS_PER_ROOM)),
+	map(rows + ROWS_PER_ROOM, cols + COLS_PER_ROOM),
 	coin(0, 1)
 {
 	rooms.cols = (uint16_t) ceilf(cols / COLS_PER_ROOM);
@@ -99,8 +99,8 @@ Blueprint::Blueprint(size_t cols, size_t rows):
 			<< std::endl;
 	}
 
-	horiz.resize(rooms.rows + 1, std::vector < bool > (rooms.cols));
-	vert.resize(rooms.rows, std::vector < bool > (rooms.cols + 1));
+	horiz.resize(rooms.rows + 1, rooms.cols);
+	vert.resize(rooms.rows, rooms.cols + 1);
 
 	// Boundaries only at the edges of the world.
 	RoomIndex ri;
@@ -154,11 +154,11 @@ void Blueprint::dump(const char *filename)
 		"255 255 0", // WmoverTrack
 	};
 	std::ofstream out(filename);
-	out << "P3\n" << map[0].size()*SCALE << ' ' << map.size()*SCALE << '\n' << "255\n";
+	out << "P3\n" << map.numCols()*SCALE << ' ' << map.numRows()*SCALE << '\n' << "255\n";
 
-	for (const auto & row:this->map)
+	for (const auto& row: this->map)
 		for(uint8_t i = 0; i < SCALE; ++i) {
-			for (const auto & col:row) {
+			for (const auto& col: row) {
 				for(uint8_t j = 0; j < SCALE; ++j)
 					out << colormap[col] << ' ';
 			}
