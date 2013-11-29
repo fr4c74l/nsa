@@ -749,6 +749,7 @@ void Blueprint::extra_walls()
 	} // for walls.
 }
 
+/*
 int main(int argc, char **argv)
 {
 	uint16_t cols = 130, rows = 32;
@@ -766,3 +767,4 @@ int main(int argc, char **argv)
 	auto b = Blueprint(cols, rows);
 	b.dump(filename);
 }
+*/
