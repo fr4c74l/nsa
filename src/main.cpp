@@ -1,7 +1,7 @@
+#include "precompiled.hpp"
+
 #include <unordered_set>
 #include <iostream>
-#include <Ogre.h>
-#include <OgrePlugin.h>
 
 class Updater:
 	public Ogre::FrameListener

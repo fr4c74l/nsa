@@ -25,10 +25,13 @@ all: nsa
 nsa: $(OBJS) | build
 	$(CXX) -o nsa $(OBJS) $(LIBS)
 
+build/precompiled.hpp.gch: src/precompiled.hpp | build
+	$(CXX) -c $(CFLAGS) src/precompiled.hpp -o build/precompiled.hpp.gch
+
 -include $(DEPS)
 
-build/%.o: src/%.cpp | build deps
-	$(CXX) -c $(CFLAGS) src/$*.cpp -o build/$*.o
+build/%.o: build/precompiled.hpp.gch src/%.cpp | build deps
+	$(CXX) -include build/precompiled.hpp -c $(CFLAGS) src/$*.cpp -o build/$*.o
 	$(CXX) -MM -MT build/$*.o $(CFLAGS) src/$*.cpp > deps/$*.d
 
 build:
