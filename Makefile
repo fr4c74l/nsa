@@ -41,4 +41,4 @@ deps:
 	mkdir deps
 
 clean:
-	-rm -rf build deps
+	-rm -rf build deps nsa
