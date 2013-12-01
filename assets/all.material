@@ -1,0 +1,59 @@
+material grey
+{
+	technique
+	{
+		pass
+		{
+			ambient 0.5 0.5 0.5
+			diffuse 0.5 0.5 0.5
+		}
+	}
+}
+
+material red
+{
+	technique
+	{
+		pass
+		{
+			ambient 0.8 0.2 0.2
+			diffuse 0.8 0.2 0.2
+		}
+	}
+}
+
+material blue
+{
+	technique
+	{
+		pass
+		{
+			ambient 0.2 0.2 0.8
+			diffuse 0.2 0.2 0.8
+		}
+	}
+}
+
+material green
+{
+	technique
+	{
+		pass
+		{
+			ambient 0.2 0.8 0.2
+			diffuse 0.2 0.8 0.2
+		}
+	}
+}
+
+material yellow
+{
+	technique
+	{
+		pass
+		{
+			ambient 0.8 0.8 0.2
+			diffuse 0.8 0.8 0.2
+		}
+	}
+}

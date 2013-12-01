@@ -11,7 +11,7 @@ public:
 		mCube(cube)
 	{}
 
-	bool frameStarted(const Ogre::FrameEvent &evt)
+	bool frameStarted(const Ogre::FrameEvent&)
 	{
 		auto angle = Ogre::Radian(Ogre::Math::UnitRandom() * 0.1);
 		auto rand_dir = Ogre::Vector3::UNIT_X.randomDeviant(angle, Ogre::Vector3::UNIT_Y);
@@ -69,32 +69,44 @@ int main()
 		renderer.setRenderSystem(rs);
 	}
 
-	auto window = renderer.initialise(true, "No Such Arrocha");
+	// Build scene
+	{
+		renderer.addResourceLocation("./assets", "FileSystem", "General");
+		Ogre::ResourceGroupManager::getSingleton().initialiseAllResourceGroups();
 
-	auto sceneManager = renderer.createSceneManager("OctreeSceneManager");
+		auto window = renderer.initialise(true, "No Such Arrocha");
+		auto sceneManager = renderer.createSceneManager("OctreeSceneManager");
+		auto camera = sceneManager->createCamera("PlayerCam");
 
-	auto camera = sceneManager->createCamera("PlayerCam");
+		// Position it at 500 in Z direction
+		camera->setPosition(Ogre::Vector3(0,0,10));
+		// Look back along -Z
+		camera->lookAt(Ogre::Vector3(0,0,-1));
+		camera->setNearClipDistance(1);
+		
+		auto vp = window->addViewport(camera);
+		vp->setBackgroundColour(Ogre::ColourValue(0.4, 0.3, 1.0));
+		camera->setAspectRatio(
+			Ogre::Real(vp->getActualWidth()) / Ogre::Real(vp->getActualHeight()));
 
-	// Position it at 500 in Z direction
-	camera->setPosition(Ogre::Vector3(0,0,10));
-	// Look back along -Z
-	camera->lookAt(Ogre::Vector3(0,0,-1));
-	camera->setNearClipDistance(1);
-	
-	auto vp = window->addViewport(camera);
-	vp->setBackgroundColour(Ogre::ColourValue(0.8, 0.8, 1.0));
-	camera->setAspectRatio(
-		Ogre::Real(vp->getActualWidth()) / Ogre::Real(vp->getActualHeight()));
+		auto cube = sceneManager->createEntity("cube", "Prefab_Cube");
+		cube->setMaterialName("green");
+		auto cube_node = sceneManager->getRootSceneNode()->createChildSceneNode();
+		cube_node->attachObject(cube);
+		cube_node->setScale(Ogre::Vector3(0.02, 0.02, 0.02));
 
-	auto cube_node = sceneManager->getRootSceneNode()->createChildSceneNode();
-	cube_node->attachObject(
-		sceneManager->createEntity("cube", "Prefab_Cube")
-	);
-	cube_node->setScale(Ogre::Vector3(0.02, 0.02, 0.02));
+		// Lighting
+		sceneManager->setAmbientLight(Ogre::ColourValue(0.5, 0.5, 0.5));
 
-	sceneManager->setAmbientLight(Ogre::ColourValue(0.5, 0.5, 0.5));
+		auto sun = sceneManager->createLight("sun");
+		sun->setType(Ogre::Light::LT_DIRECTIONAL);
+		sun->setDiffuseColour(Ogre::ColourValue::White);
+		sun->setSpecularColour(Ogre::ColourValue::White);
+		sun->setDirection(Ogre::Vector3(-1, -5, -2));
 
-	renderer.addFrameListener(new Updater(cube_node));
+		renderer.addFrameListener(new Updater(cube_node));
+	}
+
 	renderer.startRendering();
 
 	return 0;
