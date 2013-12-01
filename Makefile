@@ -5,7 +5,7 @@ MODULES := main blueprint
 PKG_CONFIG_DEPS := OGRE OIS
 
 # Comment/uncoment for debug/release build
-#CFLAGS = -std=c++11 -O3 -flto -DNDEBUG -DDEBUG=0
+#CFLAGS := -std=c++11 -O3 -flto -DNDEBUG -DDEBUG=0
 CFLAGS := -std=c++11 -Wall -Wextra -g -DDEBUG=1
 
 # Run pkg-config and get flags
@@ -23,7 +23,7 @@ DEPS := $(addsuffix .d, $(addprefix deps/,$(MODULES)))
 all: nsa
 
 nsa: $(OBJS) | build
-	$(CXX) -o nsa $(OBJS) $(LIBS)
+	$(CXX) -o nsa $(CFLAGS) $(OBJS) $(LIBS)
 
 build/precompiled.hpp.gch: src/precompiled.hpp | build
 	$(CXX) -c $(CFLAGS) src/precompiled.hpp -o build/precompiled.hpp.gch
