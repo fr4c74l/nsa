@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <utility>
+#include <iostream>
 #include <cstddef>
 
 template<class T>
@@ -124,7 +125,10 @@ public:
 	HeapMatrix(HeapMatrix &&other):
 		mRows(other.mRows), mCols(other.mCols),
 		mVec(std::move(other.mVec))
-	{}
+	{
+		if(DEBUG)
+			std::cout << "HeapMatrix moved!" << std::endl;
+	}
 
 	void resize(size_t rows, size_t cols, const T& value = T())
 	{

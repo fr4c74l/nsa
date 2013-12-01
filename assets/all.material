@@ -56,4 +56,15 @@ material yellow
 			diffuse 0.8 0.8 0.2
 		}
 	}
+
+material dark_grey
+{
+	technique
+	{
+		pass
+		{
+			ambient 0.2 0.3 0.4
+			ambient 0.2 0.3 0.4
+		}
+	}
 }

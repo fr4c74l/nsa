@@ -2,25 +2,100 @@
 
 #include <unordered_set>
 #include <iostream>
+#include "blueprint.hpp"
+
+void build_level(Ogre::SceneManager* sm, uint16_t cols=130, uint16_t rows=32)
+{
+	Ogre::SceneNode* root = sm->getRootSceneNode();
+
+	// First, we define a plane that will be the background of the level
+	auto &meshmngr = Ogre::MeshManager::getSingleton();
+	auto bg_wall_mesh = meshmngr.createPlane("bgWall", "General",
+			Ogre::Plane(Ogre::Vector3::UNIT_Z, 0),
+			cols, rows
+			// TODO: the rest of the parameters must be adjusted in order to use texture
+	);
+	auto bg_wall = sm->createEntity(bg_wall_mesh);
+	bg_wall->setMaterialName("grey");
+	root->createChildSceneNode(Ogre::Vector3(0, 0, -1.5))->attachObject(bg_wall);
+
+	// Drawing map.
+	// Generate map with XEvil algorithm and grab the matrix for usage.
+	HeapMatrix<uint8_t> map = std::move(Blueprint(cols, rows).getMap());
+
+	// Create a scene node to displace to whole map to correct position 
+	auto walls = root->createChildSceneNode();
+	walls->setPosition(Ogre::Vector3(cols * -0.5, rows * 0.5, 0));
+
+	// Pre-load the tile mesh
+	auto wall_tile = meshmngr.load("wall_tile.mesh", Ogre::ResourceGroupManager::AUTODETECT_RESOURCE_GROUP_NAME);
+
+	// Assemble the blocks
+	for(int i = 0; i < rows; ++i) {
+		for(int j = 0; j < cols; ++j) {
+			auto t = static_cast<Blueprint::Tiles>(map[i][j]);
+			if(t != Blueprint::Wempty) {
+				auto node = walls->createChildSceneNode(Ogre::Vector3(j, -i, 0));
+				// TODO: use different meshes for each tile...
+				auto block = sm->createEntity(wall_tile);
+				node->attachObject(block);
+
+				const char* mat_name = nullptr;
+				switch(t) {
+					case Blueprint::Wwall:
+						mat_name = "dark_grey";
+						break;
+					case Blueprint::Wladder:
+						node->setScale(Ogre::Vector3(1, 1, 1.0/3.0));
+						node->translate(Ogre::Vector3(0, 0, -1));
+						mat_name = "blue";
+						break;
+					case Blueprint::WliftTrack:
+						mat_name = "red";
+						node->setScale(Ogre::Vector3(1, 1, 1.0/3.0));
+						break;
+					case Blueprint::WmoverTrack:
+						mat_name = "yellow";
+						break;
+					case Blueprint::Wempty:
+						// Can't happen
+						break;
+				}
+				block->setMaterialName(mat_name);
+			}	
+		}
+	}
+}
 
 class Updater:
 	public Ogre::FrameListener
 {
 public:
-	Updater(Ogre::SceneNode *cube):
-		mCube(cube)
+	Updater(Ogre::SceneNode* cube, Ogre::Camera* cam):
+		x(-60), mCam(cam), mCube(cube)
 	{}
 
 	bool frameStarted(const Ogre::FrameEvent&)
 	{
-		auto angle = Ogre::Radian(Ogre::Math::UnitRandom() * 0.1);
+		/*auto angle = Ogre::Radian(Ogre::Math::UnitRandom() * 0.1);
 		auto rand_dir = Ogre::Vector3::UNIT_X.randomDeviant(angle, Ogre::Vector3::UNIT_Y);
 		auto rot = Ogre::Vector3::UNIT_X.getRotationTo(rand_dir);
-		mCube->rotate(rot);
+		mCube->rotate(rot);*/
+
+		x += 0.15;
+		if(x > 60.0f)
+			return false;		
+		float y = sinf(x/5) * 10;
+
+		mCube->setPosition(Ogre::Vector3(x, 0, 0));
+		mCam->setPosition(Ogre::Vector3(x, y, 20));
+
 		return true;
 	}
 private:
-	Ogre::SceneNode *mCube;
+	float x;
+	Ogre::Camera* mCam;
+	Ogre::SceneNode* mCube;
 };
 
 int main()
@@ -77,9 +152,9 @@ int main()
 		auto window = renderer.initialise(true, "No Such Arrocha");
 		auto sceneManager = renderer.createSceneManager("OctreeSceneManager");
 		auto camera = sceneManager->createCamera("PlayerCam");
-
-		// Position it at 500 in Z direction
-		camera->setPosition(Ogre::Vector3(0,0,10));
+		
+		// Position it at 10 in Z direction
+		//camera->setPosition(Ogre::Vector3(0,0,20));
 		// Look back along -Z
 		camera->lookAt(Ogre::Vector3(0,0,-1));
 		camera->setNearClipDistance(1);
@@ -89,11 +164,10 @@ int main()
 		camera->setAspectRatio(
 			Ogre::Real(vp->getActualWidth()) / Ogre::Real(vp->getActualHeight()));
 
-		auto cube = sceneManager->createEntity("cube", "Prefab_Cube");
-		cube->setMaterialName("green");
-		auto cube_node = sceneManager->getRootSceneNode()->createChildSceneNode();
-		cube_node->attachObject(cube);
-		cube_node->setScale(Ogre::Vector3(0.02, 0.02, 0.02));
+		auto pill = sceneManager->createEntity("pill", "pill.mesh");
+		pill->setMaterialName("green");
+		auto pill_node = sceneManager->getRootSceneNode()->createChildSceneNode();
+		pill_node->attachObject(pill);
 
 		// Lighting
 		sceneManager->setAmbientLight(Ogre::ColourValue(0.5, 0.5, 0.5));
@@ -104,7 +178,8 @@ int main()
 		sun->setSpecularColour(Ogre::ColourValue::White);
 		sun->setDirection(Ogre::Vector3(-1, -5, -2));
 
-		renderer.addFrameListener(new Updater(cube_node));
+		build_level(sceneManager);
+		renderer.addFrameListener(new Updater(pill_node, camera));
 	}
 
 	renderer.startRendering();
