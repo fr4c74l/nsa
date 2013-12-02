@@ -10,7 +10,7 @@ CFLAGS := -std=c++11 -Wall -Wextra -g -DDEBUG=1
 
 # Run pkg-config and get flags
 CFLAGS += $(shell pkg-config --cflags $(PKG_CONFIG_DEPS))
-LIBS = $(shell pkg-config --libs $(PKG_CONFIG_DEPS)) -lboost_system
+LIBS = $(shell pkg-config --libs $(PKG_CONFIG_DEPS)) -lboost_system -L/usr/local/lib -lBox2D
 
 CXX = clang++
 

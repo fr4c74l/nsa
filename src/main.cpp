@@ -4,6 +4,95 @@
 #include <iostream>
 #include "blueprint.hpp"
 
+class Circuit
+{
+public:
+	Circuit(const HeapMatrix<uint8_t>& map, HeapMatrix<bool>& visited, int i, int j);
+	std::vector<b2Vec2> mVertices;
+private:
+	enum Side {
+		UP,
+		RIGHT,
+		DOWN,
+		LEFT
+	};
+
+	static const b2Vec2 OFFSET[4];
+	static const Dimension OPPOSITE[4];
+
+	bool edge(Side s, Dimension pos) const;
+	Dimension next_from(Side s) const;
+
+	void trace(Side s);
+
+	Dimension mCur;
+	HeapMatrix<bool>& mVisited;
+	const HeapMatrix<uint8_t>& mMap;
+};
+
+const b2Vec2 Circuit::OFFSET[4] = {
+	b2Vec2(0.5, 0.5),
+	b2Vec2(0.5, -0.5),
+	b2Vec2(-0.5, -0.5),
+	b2Vec2(-0.5, 0.5)
+};
+
+const Dimension Circuit::OPPOSITE[4] = {
+	Dimension(1, -1),
+	Dimension(1, 1),
+	Dimension(-1, 1),
+	Dimension(-1, -1)
+};
+
+
+Circuit::Circuit(const HeapMatrix<uint8_t>& map, HeapMatrix<bool>& visited, int i, int j):
+	mCur(j, i),
+	mVisited(visited),
+	mMap(map)
+{
+	mVisited[i][j] = true;
+	for(int s = 0; s < 4; ++s) {
+		Side side = static_cast<Side>(s);
+		if(edge(side, mCur)) {
+			mVertices.push_back(b2Vec2(j, -i) + OFFSET[(side + 3) % 4]);
+			trace(side);
+			break;
+		}
+	}
+}
+
+void Circuit::trace(Side s)
+{
+	for(;;) {
+		for(Dimension next = next_from(s); edge(s, next); mCur = next)
+			mVisited[next.rows][next.cols] = true;
+
+		b2Vec2 vertex = b2Vec2(mCur.cols, -mCur.rows) + OFFSET[s];
+		b2Vec2 delta = mVertices[0] - vertex;
+		if(delta.x > -0.5 && delta.x < 0.5 && delta.y > -0.5 && delta.y < 0.5)
+			break;
+		mVertices.push_back(vertex);
+
+		Side maybe_next_side = static_cast<Side>((s+1) % 4);
+		if(edge(maybe_next_side, mCur)) {
+			// The edge follows the same tile around, clockwise...
+			s = maybe_next_side;
+		} else {
+			// The edge follows counter-clockwise, on another
+			// tile diagonally touching the current one...
+			auto &op = OPPOSITE[s];
+			mCur.rows += op.rows;
+			mCur.cols += op.cols;
+			s = static_cast<Side>((s+3) % 4);
+
+			mVisited[mCur.rows][mCur.cols] = true;
+			assert(edge(s, mCur));
+		}
+	}
+}
+
+// TODO: to be continued implementing Circuit class
+
 void build_level(Ogre::SceneManager* sm, uint16_t cols=130, uint16_t rows=32)
 {
 	Ogre::SceneNode* root = sm->getRootSceneNode();
@@ -25,7 +114,7 @@ void build_level(Ogre::SceneManager* sm, uint16_t cols=130, uint16_t rows=32)
 
 	// Create a scene node to displace to whole map to correct position 
 	auto walls = root->createChildSceneNode();
-	walls->setPosition(Ogre::Vector3(cols * -0.5, rows * 0.5, 0));
+	walls->setPosition(Ogre::Vector3((cols - 1) * -0.5, (rows - 1) * 0.5, 0));
 
 	// Pre-load the tile mesh
 	auto wall_tile = meshmngr.load("wall_tile.mesh", Ogre::ResourceGroupManager::AUTODETECT_RESOURCE_GROUP_NAME);
@@ -65,6 +154,18 @@ void build_level(Ogre::SceneManager* sm, uint16_t cols=130, uint16_t rows=32)
 			}	
 		}
 	}
+
+	// Build map collidable shape
+	HeapMatrix<bool> visited(rows, cols, false);
+	for(int i = 0; i < rows; ++i) {
+		for(int j = 0; j < cols; ++j) {
+			auto t = static_cast<Blueprint::Tiles>(map[i][j]);
+			if(t == Blueprint::Wwall && !visited[i][j]) {
+				Circuit c(map, visited, i, j);
+				// TODO: to be continued
+			}
+		}
+	}
 }
 
 class Updater:
@@ -72,7 +173,7 @@ class Updater:
 {
 public:
 	Updater(Ogre::SceneNode* cube, Ogre::Camera* cam):
-		x(-60), mCam(cam), mCube(cube)
+		x(-80), mCam(cam), mCube(cube)
 	{}
 
 	bool frameStarted(const Ogre::FrameEvent&)
@@ -83,12 +184,14 @@ public:
 		mCube->rotate(rot);*/
 
 		x += 0.15;
-		if(x > 60.0f)
+		if(x > 80.0f)
 			return false;		
-		float y = sinf(x/5) * 10;
+		float y = sinf(x/5) * 15;
+		//float z = sqrtf(100*100 - x*x);
 
 		mCube->setPosition(Ogre::Vector3(x, 0, 0));
 		mCam->setPosition(Ogre::Vector3(x, y, 20));
+		//mCam->lookAt(Ogre::Vector3::ZERO);
 
 		return true;
 	}
@@ -100,6 +203,10 @@ private:
 
 int main()
 {
+	// Setup physics simulation Box2D
+	b2World physics(b2Vec2(0, -9.8));
+
+	// Setup graphics engine Ogre
 	Ogre::Root renderer("", "", "renderer.log");
 
 	// Load plugins

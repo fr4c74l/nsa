@@ -8,20 +8,6 @@
 
 std::mt19937 rand_gen((std::random_device())());
 
-struct RoomIndex {
-	uint16_t across;
-	uint16_t down;
-};
-
-struct Dimension {
-	Dimension()
-	{}
-	
-	Dimension(uint16_t c, uint16_t r):cols(c), rows(r)
-	{}
-	int16_t cols, rows;
-};
-
 const float Blueprint::ROWS_PER_ROOM = 16;
 const float Blueprint::COLS_PER_ROOM = 26;
 

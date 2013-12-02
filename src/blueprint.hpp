@@ -6,6 +6,15 @@
 
 #include "heapmatrix.hpp"
 
+struct Dimension {
+	Dimension()
+	{}	
+	Dimension(uint16_t c, uint16_t r):
+		cols(c), rows(r)
+	{}
+	int16_t cols, rows;
+};
+
 class Blueprint {
 public:
 	Blueprint(size_t cols, size_t rows);
@@ -29,15 +38,6 @@ private:
 	struct RoomIndex {
 		uint16_t across;
 		uint16_t down;
-	};
-
-	struct Dimension {
-		Dimension()
-		{}	
-		Dimension(uint16_t c, uint16_t r):
-			cols(c), rows(r)
-		{}
-		int16_t cols, rows;
 	};
 
 	bool is_room_open(const RoomIndex & ri) const;
