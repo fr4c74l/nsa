@@ -327,6 +327,7 @@ int main()
 	b2Body* world_body;
 	{
 		b2BodyDef def;
+		def.type = b2_staticBody;
 		world_body = physics.CreateBody(&def);
 	}
 
@@ -383,13 +384,13 @@ int main()
 		auto window = renderer.initialise(true, "No Such Arrocha");
 		auto sceneManager = renderer.createSceneManager("OctreeSceneManager");
 		auto camera = sceneManager->createCamera("PlayerCam");
-		
+
 		// Position it at 10 in Z direction
 		//camera->setPosition(Ogre::Vector3(0,0,20));
 		// Look back along -Z
 		camera->lookAt(Ogre::Vector3(0,0,-1));
 		camera->setNearClipDistance(1);
-		
+
 		auto vp = window->addViewport(camera);
 		vp->setBackgroundColour(Ogre::ColourValue(0.4, 0.3, 1.0));
 		camera->setAspectRatio(
