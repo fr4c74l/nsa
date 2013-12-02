@@ -1,5 +1,5 @@
 # Software modules to be built
-MODULES := main blueprint
+MODULES := main blueprint vec2
 
 # Dependencies configurable with pkg-config
 PKG_CONFIG_DEPS := OGRE OIS

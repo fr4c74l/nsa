@@ -56,8 +56,9 @@ material yellow
 			diffuse 0.8 0.8 0.2
 		}
 	}
+}
 
-material dark_grey
+material darkgrey
 {
 	technique
 	{

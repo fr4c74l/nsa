@@ -7,70 +7,141 @@
 class Circuit
 {
 public:
-	Circuit(const HeapMatrix<uint8_t>& map, HeapMatrix<bool>& visited, int i, int j);
-	std::vector<b2Vec2> mVertices;
+	Circuit(const HeapMatrix<uint8_t>& map, HeapMatrix<bool>& visited, const IVec2& max, IVec2 cur);
+	const std::vector<b2Vec2>& getPath() const
+	{
+		return mVertices;
+	}
 private:
 	enum Side {
-		UP,
-		RIGHT,
 		DOWN,
-		LEFT
+		LEFT,
+		UP,
+		RIGHT
 	};
 
 	static const b2Vec2 OFFSET[4];
-	static const Dimension OPPOSITE[4];
+	static const IVec2 OPPOSITE[4];
 
-	bool edge(Side s, Dimension pos) const;
-	Dimension next_from(Side s) const;
+	bool is_wall(const IVec2& pos) const;
+	bool edge(Side s, IVec2 pos) const;
+	IVec2 next_from(Side s) const;
 
 	void trace(Side s);
 
-	Dimension mCur;
-	HeapMatrix<bool>& mVisited;
+	const IVec2& mMax;
 	const HeapMatrix<uint8_t>& mMap;
+	HeapMatrix<bool>& mVisited;
+	std::vector<b2Vec2> mVertices;
+
+	IVec2 mCur;
 };
 
 const b2Vec2 Circuit::OFFSET[4] = {
-	b2Vec2(0.5, 0.5),
-	b2Vec2(0.5, -0.5),
 	b2Vec2(-0.5, -0.5),
-	b2Vec2(-0.5, 0.5)
+	b2Vec2(-0.5, 0.5),
+	b2Vec2(0.5, 0.5),
+	b2Vec2(0.5, -0.5)
 };
 
-const Dimension Circuit::OPPOSITE[4] = {
-	Dimension(1, -1),
-	Dimension(1, 1),
-	Dimension(-1, 1),
-	Dimension(-1, -1)
+const IVec2 Circuit::OPPOSITE[4] = {
+	IVec2(-1, 1),
+	IVec2(-1, -1),
+	IVec2(1, -1),
+	IVec2(1, 1)
 };
 
-
-Circuit::Circuit(const HeapMatrix<uint8_t>& map, HeapMatrix<bool>& visited, int i, int j):
-	mCur(j, i),
+Circuit::Circuit(const HeapMatrix<uint8_t>& map, HeapMatrix<bool>& visited, const IVec2& max, IVec2 cur):
+	mMax(max),
+	mMap(map),
 	mVisited(visited),
-	mMap(map)
+	mCur(cur)
 {
-	mVisited[i][j] = true;
+	assert(is_wall(cur));
+
+	mVisited[cur.y][cur.x] = true;
 	for(int s = 0; s < 4; ++s) {
 		Side side = static_cast<Side>(s);
 		if(edge(side, mCur)) {
-			mVertices.push_back(b2Vec2(j, -i) + OFFSET[(side + 3) % 4]);
 			trace(side);
 			break;
 		}
 	}
 }
 
+bool Circuit::is_wall(const IVec2& pos) const
+{
+	return static_cast<Blueprint::Tiles>(mMap[pos.y][pos.x]) == Blueprint::Wwall;
+}
+
+bool Circuit::edge(Side s, IVec2 pos) const
+{
+	// We work under assumption this position is a wall...
+	assert(is_wall(pos));
+
+	// Displace pos to the relevant side:
+	switch(s)
+	{
+	case DOWN:
+		if(++pos.y >= mMax.y)
+			return false;
+		break;
+	case LEFT:
+		if(--pos.x < 0)
+			return false;
+		break;
+	case UP:
+		if(--pos.y < 0)
+			return false;
+		break;
+	case RIGHT:
+		if(++pos.x >= mMax.x)
+			return false;
+		break;
+	}
+
+	// If new position is not a wall, and previous was,
+	// we found an edge!
+	return !is_wall(pos);
+}
+
+IVec2 Circuit::next_from(Side s) const
+{
+	IVec2 ret = mCur;
+	switch(s)
+	{
+	case DOWN:
+		--ret.x;
+		break;
+	case LEFT:
+		--ret.y;
+		break;
+	case UP:
+		++ret.x;
+		break;
+	case RIGHT:
+		++ret.y;
+		break;
+	}
+	return ret;
+}
+
 void Circuit::trace(Side s)
 {
 	for(;;) {
-		for(Dimension next = next_from(s); edge(s, next); mCur = next)
-			mVisited[next.rows][next.cols] = true;
+		IVec2 next = next_from(s);
+		while(is_wall(next) && edge(s, next)) {
+			mCur = next;
+			mVisited[next.y][next.x] = true;
+			next = next_from(s);
+		}
 
-		b2Vec2 vertex = b2Vec2(mCur.cols, -mCur.rows) + OFFSET[s];
-		b2Vec2 delta = mVertices[0] - vertex;
-		if(delta.x > -0.5 && delta.x < 0.5 && delta.y > -0.5 && delta.y < 0.5)
-			break;
+		b2Vec2 vertex = Blueprint::toCoord(mCur) + OFFSET[s];
+		if(!mVertices.empty()) {
+			b2Vec2 delta = mVertices[0] - vertex;
+			if(delta.x > -0.5 && delta.x < 0.5 && delta.y > -0.5 && delta.y < 0.5)
+				break;
+		}
 		mVertices.push_back(vertex);
 
 		Side maybe_next_side = static_cast<Side>((s+1) % 4);
@@ -80,20 +151,44 @@ void Circuit::trace(Side s)
 		} else {
 			// The edge follows counter-clockwise, on another
 			// tile diagonally touching the current one...
-			auto &op = OPPOSITE[s];
-			mCur.rows += op.rows;
-			mCur.cols += op.cols;
+			mCur += OPPOSITE[s];
 			s = static_cast<Side>((s+3) % 4);
 
-			mVisited[mCur.rows][mCur.cols] = true;
+			mVisited[mCur.y][mCur.x] = true;
 			assert(edge(s, mCur));
 		}
 	}
 }
 
-// TODO: to be continued implementing Circuit class
+void create_line_material()
+{
+	// NOTE: The second parameter to the create method is the resource group the material will be added to.
+	// If the group you name does not exist (in your resources.cfg file) the library will assert() and your program will crash
+	Ogre::MaterialPtr myManualObjectMaterial = Ogre::MaterialManager::getSingleton().create("line","General"); 
+	myManualObjectMaterial->setReceiveShadows(false); 
+	myManualObjectMaterial->getTechnique(0)->setLightingEnabled(true); 
+	myManualObjectMaterial->getTechnique(0)->getPass(0)->setDiffuse(0,1,1,0); 
+	myManualObjectMaterial->getTechnique(0)->getPass(0)->setAmbient(0,1,1); 
+	myManualObjectMaterial->getTechnique(0)->getPass(0)->setSelfIllumination(0,0,1);
+}
 
-void build_level(Ogre::SceneManager* sm, uint16_t cols=130, uint16_t rows=32)
+void draw_lines(Ogre::SceneManager *sm, Ogre::SceneNode* root, std::vector<b2Vec2> verts)
+{
+	Ogre::ManualObject* myManualObject = sm->createManualObject(); 
+	Ogre::SceneNode* myManualObjectNode = root->createChildSceneNode(); 
+	 
+	myManualObject->begin("line", Ogre::RenderOperation::OT_LINE_STRIP);
+	for(const auto& v: verts) {
+		myManualObject->position(v.x, v.y, 2);
+	}
+	myManualObject->position(verts[0].x, verts[0].y, 2);
+	myManualObject->end();
+	 
+	myManualObjectNode->attachObject(myManualObject);
+}
+
+void build_level(Ogre::SceneManager* sm, b2Body* world_body,
+		uint16_t cols=130, uint16_t rows=32)
 {
 	Ogre::SceneNode* root = sm->getRootSceneNode();
 
@@ -118,6 +213,7 @@ void build_level(Ogre::SceneManager* sm, uint16_t cols=130, uint16_t rows=32)
 
 	// Pre-load the tile mesh
 	auto wall_tile = meshmngr.load("wall_tile.mesh", Ogre::ResourceGroupManager::AUTODETECT_RESOURCE_GROUP_NAME);
+	wall_tile->getSubMesh(0)->setMaterialName("darkgrey");
 
 	// Assemble the blocks
 	for(int i = 0; i < rows; ++i) {
@@ -131,9 +227,6 @@ void build_level(Ogre::SceneManager* sm, uint16_t cols=130, uint16_t rows=32)
 
 				const char* mat_name = nullptr;
 				switch(t) {
-					case Blueprint::Wwall:
-						mat_name = "dark_grey";
-						break;
 					case Blueprint::Wladder:
 						node->setScale(Ogre::Vector3(1, 1, 1.0/3.0));
 						node->translate(Ogre::Vector3(0, 0, -1));
@@ -145,27 +238,52 @@ void build_level(Ogre::SceneManager* sm, uint16_t cols=130, uint16_t rows=32)
 						break;
 					case Blueprint::WmoverTrack:
 						mat_name = "yellow";
+						node->setScale(Ogre::Vector3(1, 1, 1.0/3.0));
+						node->translate(Ogre::Vector3(0, 0, 1));
 						break;
+					case Blueprint::Wwall:
+						// Already set...
 					case Blueprint::Wempty:
-						// Can't happen
-						break;
+						// Can't happen...
+						;
 				}
-				block->setMaterialName(mat_name);
+				if(mat_name)
+					block->setMaterialName(mat_name);
 			}	
 		}
 	}
 
+	// Set correct position for world physics body
+	auto& walls_pos = walls->getPosition();
+	world_body->SetTransform(b2Vec2(walls_pos.x, walls_pos.y), 0);
+
+	if(DEBUG)
+		create_line_material();
+	
 	// Build map collidable shape
 	HeapMatrix<bool> visited(rows, cols, false);
+	const IVec2 max(cols, rows);
+	int closed_edges_count = 0;
 	for(int i = 0; i < rows; ++i) {
 		for(int j = 0; j < cols; ++j) {
 			auto t = static_cast<Blueprint::Tiles>(map[i][j]);
 			if(t == Blueprint::Wwall && !visited[i][j]) {
-				Circuit c(map, visited, i, j);
-				// TODO: to be continued
+				Circuit c(map, visited, max, IVec2(j, i));
+				auto& path = c.getPath();
+				if(!path.empty()) {
+					b2ChainShape circuit_shape;
+					circuit_shape.CreateLoop(&path[0], path.size());
+					world_body->CreateFixture(&circuit_shape, 0);
+					++closed_edges_count;
+					if(DEBUG)
+						draw_lines(sm, walls, path);
+				}
 			}
 		}
 	}
+
+	if(DEBUG)
+		std::cout << "Closed edges count: " << closed_edges_count << std::endl;
 }
 
 class Updater:
@@ -173,7 +291,7 @@ class Updater:
 {
 public:
 	Updater(Ogre::SceneNode* cube, Ogre::Camera* cam):
-		x(-80), mCam(cam), mCube(cube)
+		x(-60), mCam(cam), mCube(cube)
 	{}
 
 	bool frameStarted(const Ogre::FrameEvent&)
@@ -183,8 +301,8 @@ public:
 		auto rot = Ogre::Vector3::UNIT_X.getRotationTo(rand_dir);
 		mCube->rotate(rot);*/
 
-		x += 0.15;
-		if(x > 80.0f)
+		x += 0.05;
+		if(x > 60.0f)
 			return false;		
 		float y = sinf(x/5) * 15;
 		//float z = sqrtf(100*100 - x*x);
@@ -205,6 +323,12 @@ int main()
 {
 	// Setup physics simulation Box2D
 	b2World physics(b2Vec2(0, -9.8));
+
+	b2Body* world_body;
+	{
+		b2BodyDef def;
+		world_body = physics.CreateBody(&def);
+	}
 
 	// Setup graphics engine Ogre
 	Ogre::Root renderer("", "", "renderer.log");
@@ -245,7 +369,7 @@ int main()
 		assert(rs->getName() == "OpenGL Rendering Subsystem");
 		// configure our RenderSystem
 		rs->setConfigOption("Full Screen", "No");
-		rs->setConfigOption("VSync", "No");
+		rs->setConfigOption("VSync", "Yes");
 		rs->setConfigOption("Video Mode", "800 x 600 @ 32-bit");
 	 
 		renderer.setRenderSystem(rs);
@@ -285,7 +409,7 @@ int main()
 		sun->setSpecularColour(Ogre::ColourValue::White);
 		sun->setDirection(Ogre::Vector3(-1, -5, -2));
 
-		build_level(sceneManager);
+		build_level(sceneManager, world_body);
 		renderer.addFrameListener(new Updater(pill_node, camera));
 	}
 

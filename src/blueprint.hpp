@@ -1,10 +1,12 @@
 #pragma once
 
+#include "precompiled.hpp"
+
 #include <cstdint>
 #include <cstdlib>
 #include <random>
-
 #include "heapmatrix.hpp"
+#include "vec2.hpp"
 
 struct Dimension {
 	Dimension()
@@ -31,6 +33,10 @@ public:
 	HeapMatrix<uint8_t>& getMap()
 	{
 		return map;
+	}
+
+	static b2Vec2 toCoord(const IVec2& pos) {
+		return b2Vec2(pos.x, -pos.y);
 	}
 
 private:
